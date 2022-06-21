@@ -14,7 +14,7 @@ Ensure that you have a base understanding of AWS IoT, AWS VPC, AWS EC2 and AWS C
 
 ## Instructions
 
-You can install this solution into your environment by first cloning this Git repository, then cd into `greengrass-private-network` directory. 
+You can install this solution into your environment by first cloning this Git repository, then cd into `aws-greengrass-private-network` directory. 
 Next create a Python3 virtual environment and activate it. 
  
 ```
