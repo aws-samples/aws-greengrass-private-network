@@ -262,7 +262,7 @@ class GreengrassPrivateNetworkStack(Stack):
             vpcs=[gg_vpc],
         )
 
-        iot_client = boto3.client("iot")
+        iot_client = boto3.client("iot", Stack.of(self).region)
         iot_endpoint = iot_client.describe_endpoint(endpointType="iot:Data-ATS")
         iot_endpoint_address = iot_endpoint["endpointAddress"]
 
