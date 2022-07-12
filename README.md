@@ -63,9 +63,7 @@ Create an S3 bucket called greengrass-setup-<account_id> substituting your accou
 
 ```
 cd ~
-aws s3 cp s3://greengrass-setup-<account_id>/<hash>-setup.tar.gz .
-aws s3 cp s3://greengrass-setup-<account_id>/greengrass-linux-aarch64-1.11.6.tar.gz .
-
+aws s3 sync s3://greengrass-setup-<ACCOUNT_ID>/ .
 ```
 
 Now that you have the required files in place, resume with the instructions [Start AWS IoT Greengrass on the core device](https://docs.aws.amazon.com/greengrass/v1/developerguide/gg-device-start.html) at Step 4. Install the AWS IoT Greengrass Core software and the security resources. Once you've successfully installed and started Greengrass, it's time to setup your private network and test out connectivity to your VPC Endpoints. You may also want to navigate to the settings of your AWS Greengrass group in the IoT Core console to [enable local and CloudWatch logs](https://docs.aws.amazon.com/greengrass/v1/developerguide/greengrass-logs-overview.html#config-logs). 
@@ -116,6 +114,6 @@ sudo ./greengrassd start
 
 You should see several MQTT messages from Greengrass showing your private connectivity flowing through your VPC Endpoints in your isolated subnets. You have validated your endpoints and Greengrass connectivity, but have only exercised the IoT Core endpoint for MQTT communications. 
 
-<!-- You can take this a step further by working through Module 3 parts 1 and 2 [Lambda Functions on AWS IoT Greengrass](https://docs.aws.amazon.com/greengrass/v1/developerguide/module3-I.html). -->
+You can take this a step further by working through Module 3 parts 1 and 2 [Lambda Functions on AWS IoT Greengrass](https://docs.aws.amazon.com/greengrass/v1/developerguide/module3-I.html).
 
 You are now ready to connect your OT network to your greengrass-private-network VPC. You can also opt to delete your NAT Gateway, Internet Gateway and public subnets, or customize the CDK stack to align with your networking requirements.
