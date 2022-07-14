@@ -1,7 +1,7 @@
 
 # AWS IoT Greengrass Private Networking with AWS PrivateLink
 
-This is a python 3 based CDK solution that will build out the resources required to establish a private network between an OT site and cloud based AWS IoT services using AWS IoT Greengrass. You can learn more about how this solution helps secure industry 4.0 architectures by visiting the companion AWS IoT Blog (To be released soon) [Secure Industry 4.0 networks with AWS IoT Greengrass and AWS PrivateLink](https://aws.amazon.com/blogs/iot/)
+This is a python 3 based CDK solution that will build out the resources required to establish a private network between an OT site and cloud based AWS IoT services using AWS IoT Greengrass. You can learn more about how this solution helps secure industry 4.0 architectures by visiting the companion AWS IoT Blog  [How to securely connect an AWS IoT Greengrass v1 device to AWS IoT Core using AWS PrivateLink](https://aws.amazon.com/blogs/iot/how-to-securely-connect-an-aws-iot-greengrass-v1-device-to-aws-iot-core-using-aws-privatelink/)
 
 ## Overview
 
