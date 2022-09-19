@@ -20,7 +20,8 @@ chmod +x cgroupfs-mount.sh
 bash ./cgroupfs-mount.sh
 
 # install java
-yum install java-1.8.0-openjdk -y
+
+sudo amazon-linux-extras install java-openjdk11 -y
 
 yum install git -y
 yum install pip -y

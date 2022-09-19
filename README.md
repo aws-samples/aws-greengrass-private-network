@@ -41,6 +41,13 @@ export CDK_DEPLOY_ACCOUNT=<AWS_ACCOUNT>
 export CDK_DEPLOY_REGION=<AWS_REGION>
 ```
 
+Or if you use a Linux based shell use the cli tool 'jq' you can run these commands
+
+```
+export CDK_DEPLOY_ACCOUNT=$(aws sts get-caller-identity | jq -r .Account)
+export CDK_DEPLOY_REGION=$(aws configure get region)
+```
+
 You are now ready to bootstrap the CDK in your account if you have not already done so. 
 
 ```
