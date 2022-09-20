@@ -84,7 +84,9 @@ Your Ec2 instance for Greengrass in the remote secure zone subnet currently has 
 
 ## AWS IoT Greengrass Configuration
 
-Now that your VPN is configured you are ready to  configure the AWS IoT Greengrass runtime. The Greengrass instance is setup for Systems Manger Session Manager so that you can easily connect from the AWS Console without SSH or an SSH key pair. On the EC2 console select the Greengrass EC2 instance then choose Connect and once on the Connect screen choose the Session Manager tab. Note that as of today AWS Greengrass v2 will not run in a completely isolated subnet, so for the time being this solutions configures IoT GreenGrass v1. To install AWS IoT Greengrass v1, go to the console and connect to your instance using AWS Systems Manager. Then you can follow [Module 2: Installing the AWS IoT Greengrass Core software](https://docs.aws.amazon.com/greengrass/v1/developerguide/module2.html). 
+Now that your VPN is configured you are ready to  configure the AWS IoT Greengrass runtime. The Greengrass instance is setup for Systems Manger Session Manager so that you can easily connect from the AWS Console without SSH or an SSH key pair. On the EC2 console select the Greengrass EC2 instance then choose Connect and once on the Connect screen choose the Session Manager tab. Note that as of today AWS Greengrass v2 will not run in a completely isolated subnet, so for the time being this solution configures IoT GreenGrass v1. An update will be published to this repository enabling a proxy configuration running in the cloud VPC to enable Greengrass V2 private networking.
+
+To install AWS IoT Greengrass v1, go to the console and connect to your instance using AWS Systems Manager. Then you can follow [Module 2: Installing the AWS IoT Greengrass Core software](https://docs.aws.amazon.com/greengrass/v1/developerguide/module2.html). 
 
 You are able to skip Module 1 as the CDK stack already setup the EC2 instance with required dependencies. Since your instance does not have internet access I've configured the instance profile with permissions to a specific S3 bucket. Download your IoT Thing certificate files as well as the greengrass binary to an S3 bucket you can create. You'll need the "Armv8 (AArch64) Linux" version for the EC2 instance setup in this solution. 
 
@@ -108,25 +110,23 @@ nslookup logs.<region>.amazonaws.com
 nslookup <hash>-ats.iot.<region>.amazonaws.com
 ```
 
-For each lookup, once you've replaced the values in brackets, you will see endpoints resolve inside the VPC CIDR block range for your private network. You can see this CIDR block range printed in the CDK output, the value will be similar to `greengrass-private-network.GreengrassVpcCIDRBlock = 10.0.0.0/16`
+For each lookup, once you've replaced the values in brackets, you will see endpoints resolve inside the VPC CIDR block range for your private network. You can see this CIDR block range printed in the CDK output, the value will be similar to `greengrass-private-network-vpn.CloudGreengrassVPCCIDRBlock = 172.16.1.0/24`
 
 Output from nslookup commands that show endpoint addresses in your private network VPC CIDR Range will look similar to the following with an entry for each associated subnet:
 
 ```
 $ nslookup greengrass-ats.iot.us-west-2.amazonaws.com
-Server:  10.0.0.2
-Address: 10.0.0.2#53
+Server:         172.16.0.2
+Address:        172.16.0.2#53
 
 Non-authoritative answer:
-Name:    greengrass-ats.iot.us-west-2.amazonaws.com
-Address: 10.0.111.120
-Name:    greengrass-ats.iot.us-west-2.amazonaws.com
-Address: 10.0.175.96
-Name:    greengrass-ats.iot.us-west-2.amazonaws.com
-Address: 10.0.154.211
+Name:   greengrass-ats.iot.us-west-2.amazonaws.com
+Address: 172.16.1.71
+Name:   greengrass-ats.iot.us-west-2.amazonaws.com
+Address: 172.16.1.132
 ```
 
-Next on the IoT Core console, browse to Test and choose MQTT Test Client and subscribe to the **Topic filter** with a value of **#** which will echo all messages. Now in your EC2 instance SSM session, start Greegrass again
+Next on the IoT Core console, browse to Test and choose MQTT Test Client and subscribe to the **Topic filter** with a value of **#** which will echo all messages. Now in your EC2 instance SSM session, start or restart Greengrass if you've already started it.
 
 ```
 cd /greengrass/ggc/core/

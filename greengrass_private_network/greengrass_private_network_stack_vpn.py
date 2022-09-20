@@ -113,7 +113,8 @@ class GreengrassPrivateNetworkStackVPN(Stack):
         logs_endpoint = gg_vpc.add_interface_endpoint(
             "LogsEndpoint",
             service=ec2.InterfaceVpcEndpointAwsService("logs", port=443),
-            private_dns_enabled=True,
+            private_dns_enabled=False,  # you can enable private DNS,
+            # but for the simulated OT network we'll instead create a Private Hosted Zone and deploy to both VPCs
             security_groups=[cloudwatch_endpoints_sg],
             lookup_supported_azs=True,
         )
@@ -137,6 +138,24 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             service=ec2.InterfaceVpcEndpointAwsService("ec2messages", port=443),
             private_dns_enabled=True,
             security_groups=[remote_endpoints_sg],
+        )
+
+        logs_endpoint_uri = "logs.{}.amazonaws.com".format(Stack.of(self).region)
+
+        logs_hosted_zone = route53.HostedZone(
+            self,
+            "LogsHostedZone",
+            zone_name=logs_endpoint_uri,
+            vpcs=[gg_vpc, remote_vpc],
+        )
+
+        route53.ARecord(
+            self,
+            "LogsRecord",
+            zone=logs_hosted_zone,
+            target=route53.RecordTarget.from_alias(
+                targets.InterfaceVpcEndpointTarget(logs_endpoint)
+            ),
         )
 
         s3_endpoint_uri = "s3.{}.amazonaws.com".format(Stack.of(self).region)
@@ -391,6 +410,9 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             self, "Greengrass Ec2 Instance:", value=greengrass_instance.instance_id
         )
         cdk.CfnOutput(self, "Remote Vpc CIDR Block:", value=remote_vpc.vpc_cidr_block)
+        cdk.CfnOutput(
+            self, "Cloud Greengrass VPC CIDR Block:", value=gg_vpc.vpc_cidr_block
+        )
         cdk.CfnOutput(self, "remoteEip Allocation ID", value=eip.attr_allocation_id)
         cdk.CfnOutput(self, "IoT Data Endpoint: ", value=iot_endpoint_address)
 
