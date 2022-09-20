@@ -66,12 +66,12 @@ cdk deploy
 
 ```python
 for subnet in gg_vpc.isolated_subnets:
-            subnet.add_route(
-                "VpnVpcRoute",
-                router_id=tgw.attr_id,
-                router_type=ec2.RouterType.TRANSIT_GATEWAY,
-                destination_cidr_block=remote_vpc.vpc_cidr_block,
-            )
+    subnet.add_route(
+        "VpnVpcRoute",
+        router_id=tgw.attr_id,
+        router_type=ec2.RouterType.TRANSIT_GATEWAY,
+        destination_cidr_block=remote_vpc.vpc_cidr_block,
+    )
 ```
 
 Without this your VPC Endpoints won't propagate to the remote VPC.
