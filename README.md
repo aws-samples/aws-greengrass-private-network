@@ -5,12 +5,12 @@ This is a python 3 based CDK solution that will build out the resources required
 
 ## Overview
 
-This solution creates a multi AZ VPC with public and private subnets. It also configures PrivateLink VPC Endpoints for the AWS services that AWS IoT Greengrass interacts with. In addition an EC2 instance is setup in a private subnet that you can use to test things out before customizing or integrating this solution for your workloads. Before you start be sure to choose a [region](https://docs.aws.amazon.com/general/latest/gr/greengrass.html) that supports AWS IoT Greengrass. 
+This solution creates a simulated OT network VPC with  public and private subnets as well as a cloud based VPC with a single isolated subnet. An AWS Site to Site VPN will be installed to connect the OT and cloud networks over a private connection. The solution configures PrivateLink VPC Endpoints for the AWS services that AWS IoT Greengrass interacts with. In addition an EC2 instance is setup in the remote private subnet where you can install AWS IoT Core Greengrass. Before you start be sure to choose a [region](https://docs.aws.amazon.com/general/latest/gr/greengrass.html) that supports AWS IoT Greengrass. This solution has been tested in us-west-2.
 
-![Architecture Diagram](GreengrassPrivateNetwork.drawio.png)
+![Architecture Diagram](docs/PrivateGreengrassNetworkVPN.png)
 
 ## Prerequisites
-Ensure that you have a base understanding of AWS IoT, AWS VPC, AWS EC2 and AWS CDK. You can learn how to install and configure the AWS CDK with this [getting started guide](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html) before running this solution. 
+Ensure that you have a base understanding of AWS IoT, AWS VPC networking, AWS EC2 and AWS CDK and AWS IoT Core. You can learn how to install and configure the AWS CDK with this [getting started guide](https://docs.aws.amazon.com/cdk/v2/guide/getting_started.html) before running this solution. 
 
 ## Instructions
 
@@ -34,21 +34,23 @@ Once the virtualenv is activated, you can install the required dependencies.
 $ pip install -r requirements.txt
 ```
 
-In addition this stack requires you to set two environment variables to properly configure VPC details. Make sure you replace the values between the brackets <> with your valid values. Note that the below example is for common linux shells like sh, bash, or zsh.
+In addition this stack requires you to set three environment variables to properly configure CDK before deploying. Make sure you replace the values between the brackets <> with your valid values. Note that the below example is for common linux shells like sh, bash, or zsh.
 
 ```
+export GREENGRASS_MODE=VPN
 export CDK_DEPLOY_ACCOUNT=<AWS_ACCOUNT>
 export CDK_DEPLOY_REGION=<AWS_REGION>
 ```
 
-Or if you use a Linux based shell use the cli tool 'jq' you can run these commands
+Or if you use a Linux based shell use and you use the cli tool [jq](https://stedolan.github.io/jq/) you can run the following commands instead of the preceding. 
 
 ```
+export GREENGRASS_MODE=VPN
 export CDK_DEPLOY_ACCOUNT=$(aws sts get-caller-identity | jq -r .Account)
 export CDK_DEPLOY_REGION=$(aws configure get region)
 ```
 
-You are now ready to bootstrap the CDK in your account if you have not already done so. 
+You are now ready to bootstrap the CDK in your account if you have not already done so. When you run these commands you should see the first line of output "Greengrass v1 VPN mode". If you do not see VPN in that output your GREENGRASS_MODE is not setup correctly. 
 
 ```
 cdk bootstrap
@@ -60,32 +62,44 @@ And deploy the greengrass private network stack
 cdk deploy
 ```
 
+**Important** At this time there is a bug in the CDK for returning the Transit Gateway ID that will cause the stack to rollback when setting up routes from your greengrass private subnet to the TGW that routes traffic to the VPN Customer Gateway. Find this block in the CDK stack **greengrass_private_network/greengrass_private_network_stack_vpn.py** and uncomment the following lines at the end of the file. Then run `cdk deploy` once more. 
+
+```python
+for subnet in gg_vpc.isolated_subnets:
+            subnet.add_route(
+                "VpnVpcRoute",
+                router_id=tgw.attr_id,
+                router_type=ec2.RouterType.TRANSIT_GATEWAY,
+                destination_cidr_block=remote_vpc.vpc_cidr_block,
+            )
+```
+
+Without this your VPC Endpoints won't propagate to the remote VPC.
+
+## VPN setup
+
+The next step is to connect your VPCs with a Site to Site VPN connection. For this you can follow the instructions in the AWS blog [Simulating Site-to-Site VPN Customer Gateways Using strongSwan](https://aws.amazon.com/blogs/networking-and-content-delivery/simulating-site-to-site-vpn-customer-gateways-strongswan/). It is beneficial to read the blog for context; the CDK solution we just installed already setup the VPCs, Transit Gateway, Elastic IP, and Customer Gateway as required. You can pick up at step **4. Download the VPN tunnel configuration**. There is a copy of the CloudFormation stack ready for you to upload to configure the VPN located in ./greengrass_private_network/vpn-gateway-strongswan.yml. Once you reach step **7. Test the VPN connection** you will only need to modify one existing route rather than adding a new one. 
+
+Your Ec2 instance for Greengrass in the remote secure zone subnet currently has access to the internet via a NAT Gateway. Locate the subnet which the Ec2 instance is running in and modify the route table entry for **0.0.0.0/0** to point to your EIP identified in your CDK or CloudFormation outputs instead of the NAT Gateway. This change cuts off internet communication making all of your remote site Greengrass traffic private. 
+
 ## AWS IoT Greengrass Configuration
 
-Once the stack is fully deployed you'll be able to login to your EC2 testing instance to configure the AWS IoT Greengrass runtime. This instance is setup for Systems Manger Session Manager so that you can easily connect from the AWS Console. On the EC2 console select the Greengrass EC2 instance then choose Connect and once on the Connect screen choose the Session Manager tab. It is best to first install AWS IoT Greengrass, then remove routes to the NAT Gateway, then begin your testing. Note that as of today AWS Greengrass v2 will not run in a completely isolated subnet, so for the time being this solutions configures IoT GreenGrass v1. To install AWS IoT Greengrass v1, go to the console and connect to your instance using AWS Systems Manager. Then you can follow [Module 2: Installing the AWS IoT Greengrass Core software](https://docs.aws.amazon.com/greengrass/v1/developerguide/module2.html). 
+Now that your VPN is configured you are ready to  configure the AWS IoT Greengrass runtime. The Greengrass instance is setup for Systems Manger Session Manager so that you can easily connect from the AWS Console without SSH or an SSH key pair. On the EC2 console select the Greengrass EC2 instance then choose Connect and once on the Connect screen choose the Session Manager tab. Note that as of today AWS Greengrass v2 will not run in a completely isolated subnet, so for the time being this solutions configures IoT GreenGrass v1. To install AWS IoT Greengrass v1, go to the console and connect to your instance using AWS Systems Manager. Then you can follow [Module 2: Installing the AWS IoT Greengrass Core software](https://docs.aws.amazon.com/greengrass/v1/developerguide/module2.html). 
 
-You are able to skip Module 1 as the CDK stack already setup the EC2 instance with required dependencies. I found that when you get to step 9. Download your core's security resources and configuration file, it is easiest to upload the xxxxxxxxx-setup.tar.gz file and the AWS Iot Greengrass to an S3 bucket. You'll need the "Armv8 (AArch64) Linux" version for the EC2 instance setup in this solution. 
+You are able to skip Module 1 as the CDK stack already setup the EC2 instance with required dependencies. Since your instance does not have internet access I've configured the instance profile with permissions to a specific S3 bucket. Download your IoT Thing certificate files as well as the greengrass binary to an S3 bucket you can create. You'll need the "Armv8 (AArch64) Linux" version for the EC2 instance setup in this solution. 
 
-Create an S3 bucket called greengrass-setup-<account_id> substituting your account id. Then upload the setup file and the AWS IoT Greengrass runtime. Next you can download these files from your bucket to EC2 and proceed with the setup instructions. Run below in your EC2 Systems Manager CLI session. Be sure to replace your account id and file name for setup before running these.
+In the S3 console create an S3 bucket called greengrass-setup-<account_id> substituting your account id. Then upload the required certificates and the AWS IoT Greengrass runtime. Next you can download these files from your bucket to your EC2 instance and proceed with the setup instructions. Be sure you are in the home directory with the command `cd ~` then run the following command in your EC2 Systems Manager CLI session. Be sure to replace your account id and file name for setup before running these. If you use a folder in the bucket be sure to adjust your command accordingly. 
 
 ```
 cd ~
 aws s3 sync s3://greengrass-setup-<ACCOUNT_ID>/ .
 ```
 
-Now that you have the required files in place, resume with the instructions [Start AWS IoT Greengrass on the core device](https://docs.aws.amazon.com/greengrass/v1/developerguide/gg-device-start.html) at Step 4. Install the AWS IoT Greengrass Core software and the security resources. Once you've successfully installed and started Greengrass, it's time to setup your private network and test out connectivity to your VPC Endpoints. You may also want to navigate to the settings of your AWS Greengrass group in the IoT Core console to [enable local and CloudWatch logs](https://docs.aws.amazon.com/greengrass/v1/developerguide/greengrass-logs-overview.html#config-logs). 
+Now that you have the required files in place, resume with the instructions [Start AWS IoT Greengrass on the core device](https://docs.aws.amazon.com/greengrass/v1/developerguide/gg-device-start.html) at Step 4. Install the AWS IoT Greengrass Core software and the security resources. 
 
 ## Private Network Validation
 
-First stop Greengrass
-```
-cd /greengrass/ggc/core/
-sudo ./greengrassd stop
-```
-
-Next we'll remove the NAT Gateways from our private subnets to isolate them from the internet. At this point they will only be able to interact with internal VPC resources including endpoints and any peered connections like your OT environment over a VPN or Direct Connect. In the AWS VPC Console navigate to VPC, then to subnets. For each subnet named like `greengrass-private-network/GreengrassPrivateNetwork/Private with NATSubnet` select the checkbox next to one of the private subnets, then on the lower half of the screen choose on Route table and choose the hyperlinked route table name. This will bring you to the route table screen when you can choose routes and remove the route to the NAT Gateway. It will be a route with a destination of `0.0.0.0/0` and a target of `nat-<hash>`. Choose edit routes and remove this route. You'll need to do this for each private subnet. 
-
-Once you've completed these steps terminate your Session Manger session with the Greengrass instance if it is still running. Then from the EC2 console start a new Session Manager connection. This time you'll make a connection to Systems Manager using your SSM VPC Endpoints setup by the CDK. We can validate the other endpoints with nslookup before firing up Greengrass as well. For the last value you'll need to replace the hash with your IoT Core endpoint value which you can find on your IoT Core Console on the Setting page. 
+In a private network we use VPC Endpoints to establish private DNS lookups to interact with AWS services like IoT, IoT Greengrass, and S3. You can validate endpoints with nslookup before firing up Greengrass as well. For the last value you'll need to replace the hash with your IoT Core endpoint value which you can find on your IoT Core Console on the Setting page. If your DNS lookup is hitting your endpoint you'll see IP addresses within hte CIDR range of your cloud side VPC which is 172.16.1.0/24.
 
 ```
 nslookup greengrass-setup-<account_id>.s3.<region>.amazonaws.com

@@ -17,7 +17,7 @@ from greengrass_private_network.greengrass_private_network_stack_vpn import (
 # Cannot look up VPC endpoint availability zones if account/region are not specified
 
 app = cdk.App()
-if os.environ.get("GREENGRASS_VERSION") == "VPN":
+if "VPN" in os.environ.get("GREENGRASS_MODE"):
     print("Greengrass v1 VPN mode")
     stack = GreengrassPrivateNetworkStackVPN(
         app,

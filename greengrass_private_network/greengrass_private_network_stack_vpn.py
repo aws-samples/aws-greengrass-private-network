@@ -139,16 +139,6 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             security_groups=[remote_endpoints_sg],
         )
 
-        # this doesn't work - certificate not valid. You have to get group.json over NAT
-        # s3_w_endpoint_uri = "s3-w.{}.amazonaws.com".format(Stack.of(self).region)
-
-        # s3_w_hosted_zone = route53.HostedZone(
-        #     self,
-        #     "s3-wHostedZone",
-        #     zone_name=s3_w_endpoint_uri,
-        #     vpcs=[gg_vpc, remote_vpc],
-        # )
-
         s3_endpoint_uri = "s3.{}.amazonaws.com".format(Stack.of(self).region)
 
         s3_hosted_zone = route53.HostedZone(
