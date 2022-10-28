@@ -398,13 +398,13 @@ class GreengrassPrivateNetworkStackVPN(Stack):
         # this fails first run, depends on doesn't work. maybe need to expose tgw id to a dependent stack - haven't tried it yet
         # need to report as an issue to CDK, potentially solve with a custom resource.
         # UGLY HACK: For now deploy twice and uncomment on 2nd run
-        # for subnet in gg_vpc.isolated_subnets:
-        #     subnet.add_route(
-        #         "VpnVpcRoute",
-        #         router_id=tgw.attr_id,
-        #         router_type=ec2.RouterType.TRANSIT_GATEWAY,
-        #         destination_cidr_block=remote_vpc.vpc_cidr_block,
-        #     )
+        for subnet in gg_vpc.isolated_subnets:
+            subnet.add_route(
+                "VpnVpcRoute",
+                router_id=tgw.attr_id,
+                router_type=ec2.RouterType.TRANSIT_GATEWAY,
+                destination_cidr_block=remote_vpc.vpc_cidr_block,
+            )
 
         cdk.CfnOutput(
             self, "Greengrass Ec2 Instance:", value=greengrass_instance.instance_id
