@@ -37,9 +37,9 @@ $ pip install -r requirements.txt
 In addition this stack requires you to set three environment variables to properly configure CDK before deploying. Make sure you replace the values between the brackets <> with your valid values. Note that the below example is for common linux shells like sh, bash, or zsh.
 
 ```
-export GREENGRASS_MODE=VPN
-export CDK_DEPLOY_ACCOUNT=<AWS_ACCOUNT>
+export GREENGRASS_MODE=VPNexport CDK_DEPLOY_ACCOUNT=<AWS_ACCOUNT>
 export CDK_DEPLOY_REGION=<AWS_REGION>
+
 ```
 
 Or if you use a Linux based shell use and you use the cli tool [jq](https://stedolan.github.io/jq/) you can run the following commands instead of the preceding. 
@@ -62,17 +62,13 @@ And deploy the greengrass private network stack
 cdk deploy
 ```
 
-**Important** At this time there is a bug in the CDK for returning the Transit Gateway ID that will cause the stack to rollback when setting up routes from your greengrass private subnet to the TGW that routes traffic to the VPN Customer Gateway. Find this block in the CDK stack **greengrass_private_network/greengrass_private_network_stack_vpn.py** and uncomment the following lines at the end of the file. Then run `cdk deploy` once more. 
+**Important** At this time there is a bug in the CDK for returning the Transit Gateway ID that will cause the stack to rollback when setting up routes from your greengrass private subnet to the TGW that routes traffic to the VPN Customer Gateway. To solve this we'll deploy each stack separately.
 
-```python
-for subnet in gg_vpc.isolated_subnets:
-    subnet.add_route(
-        "VpnVpcRoute",
-        router_id=tgw.attr_id,
-        router_type=ec2.RouterType.TRANSIT_GATEWAY,
-        destination_cidr_block=remote_vpc.vpc_cidr_block,
-    )
+``` 
+cdk deploy greengrass-private-network-tgw
+cdk deploy greengrass-private-network-vpn
 ```
+
 
 Without this your VPC Endpoints won't propagate to the remote VPC.
 

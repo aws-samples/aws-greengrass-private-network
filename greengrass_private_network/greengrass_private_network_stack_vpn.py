@@ -27,12 +27,12 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             "GreengrassPrivateNetwork",
             cidr="172.16.1.0/24",
             subnet_configuration=[
-                # ec2.SubnetConfiguration(
-                #    subnet_type=ec2.SubnetType.PUBLIC,
-                #    name="Public",
-                # ),
                 ec2.SubnetConfiguration(
-                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    subnet_type=ec2.SubnetType.PUBLIC,
+                    name="Public",
+                ),
+                ec2.SubnetConfiguration(
+                    subnet_type=ec2.SubnetType.PRIVATE_WITH_NAT,
                     name="Private Isolated Cloud Subnet",
                 ),
             ],
@@ -239,19 +239,7 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             ec2.Peer.any_ipv4(), ec2.Port.tcp(443), "logging from Greengrass"
         )
 
-        # to test basic VPN connectivity between subnets
-
-        tgw = ec2.CfnTransitGateway(
-            self,
-            id="TGW",
-            amazon_side_asn=64512,
-            dns_support="enable",
-            vpn_ecmp_support="enable",
-            default_route_table_association="enable",
-            default_route_table_propagation="enable",
-        )
-
-        ## GREENGRASS HOST
+        ## GREENGRASS V1 HOST
 
         amzn_linux = ec2.MachineImage.latest_amazon_linux(
             generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
@@ -345,11 +333,11 @@ class GreengrassPrivateNetworkStackVPN(Stack):
         )
 
         with open("./user_data/userdata.sh") as f:
-            USER_DATA = f.read()
+            USER_DATA_V1 = f.read()
 
-        greengrass_instance = ec2.Instance(
+        greengrass_v1_instance = ec2.Instance(
             self,
-            "Greengrass Instance",
+            "Greengrass V1 Instance",
             vpc=remote_vpc,
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE4_GRAVITON, ec2.InstanceSize.MICRO
@@ -360,7 +348,27 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             ),
             role=ec2_role,
             security_group=greengrass_sg,
-            user_data=ec2.UserData.custom(USER_DATA),
+            user_data=ec2.UserData.custom(USER_DATA_V1),
+            detailed_monitoring=True,
+        )
+
+        with open("./user_data/userdata_v2.sh") as f:
+            USER_DATA_V2 = f.read()
+
+        greengrass_v2_instance = ec2.Instance(
+            self,
+            "Greengrass v2 Instance",
+            vpc=remote_vpc,
+            instance_type=ec2.InstanceType.of(
+                ec2.InstanceClass.BURSTABLE4_GRAVITON, ec2.InstanceSize.MICRO
+            ),
+            machine_image=amzn_linux,
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PRIVATE_WITH_NAT,
+            ),
+            role=ec2_role,
+            security_group=greengrass_sg,
+            user_data=ec2.UserData.custom(USER_DATA_V2),
             detailed_monitoring=True,
         )
 
@@ -377,13 +385,14 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             type="ipsec.1",
         )
 
-        vpn = ec2.CfnVPNConnection(
+        tgw = ec2.CfnTransitGateway(
             self,
-            "SiteToSiteVPN",
-            customer_gateway_id=customer_gateway.attr_customer_gateway_id,
-            static_routes_only=False,
-            transit_gateway_id=tgw.attr_id,
-            type="ipsec.1",
+            id="TGW",
+            amazon_side_asn=64512,
+            dns_support="enable",
+            vpn_ecmp_support="enable",
+            default_route_table_association="enable",
+            default_route_table_propagation="enable",
         )
 
         tgw_attachment = ec2.CfnTransitGatewayAttachment(
@@ -393,21 +402,64 @@ class GreengrassPrivateNetworkStackVPN(Stack):
             transit_gateway_id=tgw.attr_id,
             subnet_ids=[subnet.subnet_id for subnet in gg_vpc.isolated_subnets],
         )
+
+        vpn = ec2.CfnVPNConnection(
+            self,
+            "SiteToSiteVPN",
+            customer_gateway_id=customer_gateway.attr_customer_gateway_id,
+            static_routes_only=False,
+            transit_gateway_id=tgw.attr_id,
+            type="ipsec.1",
+        )
+
         tgw_attachment.add_depends_on(tgw)
+
+        for subnet in gg_vpc.isolated_subnets:
+            subnet.node.try_remove_child("RouteTableAssociation")
+            subnet.node.try_remove_child("RouteTable")
+
+        route_table_tgw = ec2.CfnRouteTable(self, "RouteTableTGW", vpc_id=gg_vpc.vpc_id)
+
+        route = ec2.CfnRoute(
+            self,
+            "VpnVpcRoute",
+            route_table_id=route_table_tgw.attr_route_table_id,
+            transit_gateway_id=tgw.attr_id,
+            destination_cidr_block=remote_vpc.vpc_cidr_block,
+        )
+
+        route.node.add_dependency(tgw_attachment)
+
+        isolated_subnet_ids = [subnet.subnet_id for subnet in gg_vpc.isolated_subnets]
+        for count, subnet_id in enumerate(isolated_subnet_ids, start=1):
+            self.route_association = ec2.CfnSubnetRouteTableAssociation(
+                self,
+                f"RTAssociation-{count}",
+                route_table_id=route_table_tgw.attr_route_table_id,
+                subnet_id=subnet_id,
+            )
 
         # this fails first run, depends on doesn't work. maybe need to expose tgw id to a dependent stack - haven't tried it yet
         # need to report as an issue to CDK, potentially solve with a custom resource.
         # UGLY HACK: For now deploy twice and uncomment on 2nd run
-        for subnet in gg_vpc.isolated_subnets:
-            subnet.add_route(
-                "VpnVpcRoute",
-                router_id=tgw.attr_id,
-                router_type=ec2.RouterType.TRANSIT_GATEWAY,
-                destination_cidr_block=remote_vpc.vpc_cidr_block,
-            )
+
+        # for subnet in gg_vpc.isolated_subnets:
+        #    subnet.add_route(
+        #        "VpnVpcRoute",
+        #        router_id=tgw.attr_id,
+        #        router_type=ec2.RouterType.TRANSIT_GATEWAY,
+        #        destination_cidr_block=remote_vpc.vpc_cidr_block,
+        #    )
 
         cdk.CfnOutput(
-            self, "Greengrass Ec2 Instance:", value=greengrass_instance.instance_id
+            self,
+            "Greengrass V1 Ec2 Instance:",
+            value=greengrass_v1_instance.instance_id,
+        )
+        cdk.CfnOutput(
+            self,
+            "Greengrass V2 Ec2 Instance:",
+            value=greengrass_v2_instance.instance_id,
         )
         cdk.CfnOutput(self, "Remote Vpc CIDR Block:", value=remote_vpc.vpc_cidr_block)
         cdk.CfnOutput(
@@ -419,3 +471,6 @@ class GreengrassPrivateNetworkStackVPN(Stack):
 
 # ToDo - create secrets manager secrets for PSKs
 # ToDo - print out BGP ASN
+
+
+# NOTE To run this you must request an EIP increase above default of 5. Service Quotas -> EC2 -> EC2-VPC Elastic IPs go for 15
